@@ -54,11 +54,11 @@ app = FastAPI(
     - **Priority Classification**: Automatic batch priority assignment
     
     ### Priority Levels:
-    | Level | Days Until Expiry | Action |
-    |-------|-------------------|--------|
-    | CRITICAL | < 15 days | Sell immediately |
-    | WARNING | 15-45 days | Prioritize for sale |
-    | SAFE | > 45 days | Normal handling |
+    | Level    | Days Until Expiry |       Action        |
+    |----------|-------------------|---------------------|
+    | CRITICAL |     < 15 days     | Sell immediately    |
+    | WARNING  |    15-45 days     | Prioritize for sale |
+    | SAFE     |     > 45 days     | Normal handling     |
     
     ### Tech Stack:
     - FastAPI (Python)

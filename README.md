@@ -115,7 +115,3 @@ Cho phép request từ:
 | DATABASE_URL | Database connection string           | sqlite:///./smart_pharma.db |
 | APP_ENV      | Environment (development/production) | development                 |
 | DEBUG        | Enable debug mode                    | true                        |
-
-## License
-
-MIT License

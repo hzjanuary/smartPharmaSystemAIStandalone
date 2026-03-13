@@ -1,117 +1,133 @@
-# Smart Pharma AI Service
+# Smart Pharma FEFO Service
 
-Microservice độc lập xử lý logic AI cho hệ thống quản lý kho dược phẩm.
+Backend standalone (FastAPI) cho Smart Pharma System, tối ưu nhẹ để chạy trên TV Box Armbian (1GB RAM).
 
-## Tính năng
+Service này chỉ xử lý nghiệp vụ FEFO và cảnh báo hết hạn, còn MySQL chạy bên ngoài (Laptop demo).
 
-- **FEFO Strategy** (First Expired, First Out): Ưu tiên xuất hàng sắp hết hạn trước
-- **Expiry Alerts**: Cảnh báo các lô hàng sắp hết hạn trong hệ thống
-- **Priority Classification**: Tự động phân loại mức độ ưu tiên (CRITICAL/WARNING/SAFE)
+## Mục tiêu
+
+- FEFO theo lô hàng trong bảng `history_import`.
+- Cảnh báo lô sắp hết hạn trong 30 ngày.
+- Kết nối MySQL linh hoạt qua biến môi trường `DATABASE_URL`.
+- Mở CORS `*` để frontend trên laptop gọi API vào box.
 
 ## Tech Stack
 
-- **Framework**: FastAPI (Python 3.10+)
-- **ORM**: SQLAlchemy 2.0
-- **Database**: SQLite (dev) / PostgreSQL (production)
-- **Validation**: Pydantic v2
+- Python 3.10
+- FastAPI
+- SQLAlchemy 2.x
+- PyMySQL
+- Docker (`python:3.10-alpine`)
 
-## Cấu trúc dự án
+## Cấu trúc hiện tại
 
-```
-smart-pharma-ai/
-├── main.py                 # Entry point & CORS config
-├── requirements.txt        # Dependencies
-├── .env                    # Environment variables
-├── app/
-│   ├── db/
-│   │   ├── session.py      # Database connection
-│   │   └── models.py       # SQLAlchemy models
-│   ├── schemas/
-│   │   └── schema.py       # Pydantic schemas
-│   ├── services/
-│   │   └── fefo_engine.py  # Core FEFO logic
-│   └── api/
-│       └── endpoints.py    # REST API routes
+```text
+.
+├── main.py            # FastAPI app + endpoints + CORS
+├── database.py        # SQLAlchemy engine/session
+├── models.py          # Reflect bảng thực tế từ MySQL
+├── logic.py           # FEFO + expiry alert queries
+├── requirements.txt
+├── Dockerfile
+└── docker-compose.yml
 ```
 
-## Cài đặt
+## Database dùng trong logic
+
+Service phản chiếu (reflection) các bảng thực tế:
+
+- `history_import`
+- `product`
+- `product_category`
+- `product_image`
+- `supplier`
+- `user`
+
+Nghiệp vụ FEFO/alerts hiện tại dùng trực tiếp `history_import` và join `product`.
+
+## Cấu hình môi trường
+
+Tạo file `.env`:
+
+```env
+DATABASE_URL=mysql+pymysql://root:password@10.0.8.100:3306/smart_pharma
+```
+
+Bạn có thể đổi IP/credentials tùy môi trường mà không cần sửa code.
+
+## Chạy local (không Docker)
 
 ```bash
-# Clone repository
-git clone <repository-url>
-cd smartPharmaSystemAIFeatures
-
-# Tạo virtual environment
 python -m venv .venv
-
-# Kích hoạt virtual environment
-# Windows:
+# Windows
 .\.venv\Scripts\activate
-# Linux/Mac:
-source .venv/bin/activate
-
-# Cài đặt dependencies
 pip install -r requirements.txt
-
-# Cấu hình environment
-cp .env.example .env
-# Chỉnh sửa .env theo nhu cầu
+uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-## Chạy ứng dụng
+## Chạy bằng Docker
 
 ```bash
-# Development (auto-reload)
-uvicorn main:app --reload --port 8000
-
-# Production
-uvicorn main:app --host 0.0.0.0 --port 8000 --workers 4
+docker compose up --build -d
 ```
+
+`docker-compose.yml` chỉ chạy duy nhất service backend, không khởi chạy database container.
 
 ## API Endpoints
 
-| Method | Endpoint                                | Mô tả                                    |
-| ------ | --------------------------------------- | ---------------------------------------- |
-| GET    | `/`                                     | Thông tin service                        |
-| GET    | `/ai/health`                            | Health check                             |
-| GET    | `/ai/fefo-strategy/{product_id}`        | Danh sách lô hàng ưu tiên xuất theo FEFO |
-| GET    | `/ai/expiry-alerts`                     | Danh sách lô hàng sắp hết hạn            |
-| POST   | `/ai/maintenance/update-expired-status` | Cập nhật status batch đã hết hạn         |
+| Method | Endpoint | Mô tả |
+| ------ | -------- | ----- |
+| GET | `/` | Thông tin service |
+| GET | `/fefo/{product_id}` | Danh sách lô của sản phẩm, sắp xếp `expiry_date` tăng dần, chỉ lấy `quantity > 0` |
+| GET | `/alerts/expiry` | Danh sách lô hết hạn trong 30 ngày tới |
 
-## API Documentation
+## Ví dụ response
 
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-- **OpenAPI JSON**: http://localhost:8000/openapi.json
+### `GET /fefo/1`
 
-## Logic FEFO
+```json
+{
+	"product_id": 1,
+	"total_batches": 2,
+	"batches": [
+		{
+			"history_id": 10,
+			"product_id": 1,
+			"product_name": "Paracetamol 500mg",
+			"batch_code": "LOT-2026-01",
+			"quantity": 120,
+			"expiry_date": "2026-05-01"
+		}
+	]
+}
+```
 
-### Priority Levels
+### `GET /alerts/expiry`
 
-| Level    | Ngày còn lại | Hành động         |
-| -------- | ------------ | ----------------- |
-| CRITICAL | < 15 ngày    | Xuất ngay lập tức |
-| WARNING  | 15-45 ngày   | Ưu tiên xuất      |
-| SAFE     | > 45 ngày    | Xử lý bình thường |
+```json
+{
+	"window_days": 30,
+	"total_alerts": 1,
+	"alerts": [
+		{
+			"history_id": 10,
+			"product_id": 1,
+			"product_name": "Paracetamol 500mg",
+			"batch_code": "LOT-2026-01",
+			"quantity": 120,
+			"expiry_date": "2026-04-10",
+			"days_to_expiry": 28
+		}
+	]
+}
+```
 
-### Quy trình FEFO
+## CORS
 
-1. Truy vấn tất cả lô hàng của sản phẩm
-2. Lọc bỏ lô có `quantity = 0` hoặc đã hết hạn
-3. Sắp xếp theo `expiry_date` tăng dần
-4. Gán `priority_level` dựa trên số ngày còn lại
+Đã bật:
 
-## CORS Configuration
+```python
+allow_origins=["*"]
+```
 
-Cho phép request từ:
-
-- `http://localhost:5173` (Vite/React)
-- `http://localhost:3000` (Create React App)
-
-## Environment Variables
-
-| Variable     | Mô tả                                | Default                     |
-| ------------ | ------------------------------------ | --------------------------- |
-| DATABASE_URL | Database connection string           | sqlite:///./smart_pharma.db |
-| APP_ENV      | Environment (development/production) | development                 |
-| DEBUG        | Enable debug mode                    | true                        |
+Phù hợp cho môi trường demo LAN giữa TV Box và laptop.

@@ -1,17 +1,5 @@
-# Smart Pharma AI Service - Dependencies
-# Python 3.10+ recommended
-
-# Web Framework
-fastapi
-uvicorn
-
-# Database ORM
-sqlalchemy
-# psycopg[binary]==3.1.18  # Uncomment khi cần kết nối PostgreSQL
-
-# Data Validation
-pydantic
-pydantic-settings
-
-# Environment Variables
-python-dotenv
+fastapi==0.115.12
+uvicorn==0.34.0
+sqlalchemy==2.0.39
+PyMySQL==1.1.1
+python-dotenv==1.0.1
